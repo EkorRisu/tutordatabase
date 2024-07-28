@@ -228,94 +228,108 @@ function logout()
 }
 
     //add product
-    function getProducts()
+    function getProduct($id) {
+        global $conn;
+        $result = mysqli_query($conn, "SELECT * FROM produk WHERE id = $id");
+        return mysqli_fetch_assoc($result);
+    }
+    
+    function addToCart($product_id, $user_id, $quantity = 1) {
+        global $conn;
+        // Cek apakah produk sudah ada di keranjang
+        $result = mysqli_query($conn, "SELECT * FROM cart WHERE product_id = $product_id AND user_id = $user_id");
+        if (mysqli_num_rows($result) > 0) {
+            // Jika produk sudah ada, tambahkan kuantitas
+            mysqli_query($conn, "UPDATE cart SET quantity = quantity + $quantity WHERE product_id = $product_id AND user_id = $user_id");
+        } else {
+            // Jika produk belum ada, tambahkan produk ke keranjang
+            mysqli_query($conn, "INSERT INTO cart (product_id, user_id, quantity) VALUES ($product_id, $user_id, $quantity)");
+        }
+    }
+    
+    function getCartItems($user_id) {
+        global $conn;
+        $result = mysqli_query($conn, "
+            SELECT produk.*, cart.quantity 
+            FROM cart 
+            JOIN produk ON cart.product_id = produk.id 
+            WHERE cart.user_id = $user_id
+        ");
+        $items = [];
+        while ($row = mysqli_fetch_assoc($result)) {
+            $items[] = $row;
+        }
+        return $items;
+    }
+    //menghapus produkfunction removeFromCart($product_id, $user_id)
+    function removeFromCart($product_id, $user_id)
+    {
+        global $conn;
+    
+        // Hapus produk dari tabel keranjang berdasarkan user_id dan product_id
+        $query = "DELETE FROM cart WHERE user_id = $user_id AND product_id = $product_id";
+        return mysqli_query($conn, $query);
+    }
+    
+    
+// Fungsi untuk memproses checkout
+function checkout($user_id)
 {
     global $conn;
+    $query = "SELECT cart.product_id, produk.nama, produk.harga, cart.quantity FROM cart JOIN produk ON cart.product_id = produk.id WHERE cart.user_id = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-    $result = mysqli_query($conn, "SELECT * FROM produk");
-    $rows = [];
-
-    while ($row = mysqli_fetch_assoc($result)) {
-        $rows[] = $row;
-    }
-
-    return $rows;
-}
-
-// Fungsi untuk mendapatkan produk berdasarkan id
-function getProduct($id) {
-    global $conn;
-
-    $result = mysqli_query($conn, "SELECT * FROM produk WHERE id = $id");
-    return mysqli_fetch_assoc($result);
-
-    
-}
-
-// Fungsi untuk menambahkan produk ke keranjang
-function addToCart($data) {
-    global $conn;
-    $product_id = $data['product_id'];
-    $user_id = $data['user_id'];
-    $quantity = $data['quantity'];
-
-    // Inisialisasi keranjang dalam sesi jika belum ada
-    if (!isset($_SESSION['cart'][$user_id])) {
-        $_SESSION['cart'][$user_id] = [];
-    }
-
-    // Periksa apakah produk sudah ada di keranjang
-    if (isset($_SESSION['cart'][$user_id][$product_id])) {
-        echo "<script>alert('Produk sudah ada di keranjang');</script>";
-        return false;
-    }
-
-    // Tambahkan produk ke keranjang
-    $_SESSION['cart'][$user_id][$product_id] = [
-        'quantity' => $quantity,
-    ];
-
-    return true;
-}
-
-// Fungsi untuk menghapus produk dari keranjang
-function removeFromCart($data) {
-    $product_id = $data['product_id'];
-    $user_id = $data['user_id'];
-
-    // Periksa apakah produk ada di keranjang
-    if (!isset($_SESSION['cart'][$user_id][$product_id])) {
-        echo "<script>alert('Produk tidak ada di keranjang');</script>";
-        return false;
-    }
-
-    // Hapus produk dari keranjang
-    unset($_SESSION['cart'][$user_id][$product_id]);
-
-    return true;
-}
-
-// Fungsi untuk mendapatkan keranjang berdasarkan user_id
-function getCart($user_id) {
-    if (!isset($_SESSION['cart'][$user_id])) {
-        return [];
-    }
-
-    return $_SESSION['cart'][$user_id];
-}
-
-// Fungsi untuk menghitung total harga di keranjang
-function getCartTotal($user_id) {
-    $cart = getCart($user_id);
     $total = 0;
-
-    foreach ($cart as $product_id => $product) {
-        $quantity = $product['quantity'];
-        $product_info = getProduct($product_id);
-        $total += $product_info['harga'] * $quantity;
+    while ($row = $result->fetch_assoc()) {
+        $total += $row['harga'] * $row['quantity'];
     }
+
+    // Setelah checkout, hapus semua item dari keranjang pengguna
+    $query = "DELETE FROM cart WHERE user_id = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
 
     return $total;
 }
-?>
+function checkoutItem($product_id, $user_id)
+{
+    global $conn;
+
+    // Query untuk mendapatkan informasi produk
+    $query = "SELECT * FROM produk WHERE id = $product_id";
+    $result = mysqli_query($conn, $query);
+
+    if (!$result || mysqli_num_rows($result) == 0) {
+        return false;
+    }
+
+    $product = mysqli_fetch_assoc($result);
+
+    // Menghapus produk dari keranjang
+    if (removeFromCart($product_id, $user_id)) {
+        // Menyimpan informasi checkout ke dalam database atau melakukan tindakan lainnya
+        // Contoh sederhana: menambahkan catatan ke tabel `orders`
+        $insert_query = "INSERT INTO orders (user_id, product_id, quantity, total_price) VALUES ($user_id, $product_id, 1, {$product['harga']})";
+        mysqli_query($conn, $insert_query);
+        return true;
+    }
+    
+    return false;
+}
+
+
+function getItems($user_id)
+{
+    global $conn;
+    $query = "SELECT cart.product_id, produk.nama, produk.harga, cart.quantity FROM cart JOIN produk ON cart.product_id = produk.id WHERE cart.user_id = ?";
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    return $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+}
+    ?>
 

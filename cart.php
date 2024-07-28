@@ -1,28 +1,47 @@
 <?php
-session_start(); // Memulai sesi di awal file
-
+session_start();
 require 'fuction.php';
 
-// Memeriksa apakah pengguna sudah login
-if (!isset($_SESSION['login']) || $_SESSION['login'] !== true) {
-    // Jika belum login, arahkan ke halaman login
+// Memeriksa apakah user_id sudah diset dalam sesi
+if (!isset($_SESSION['user_id'])) {
+    // Arahkan pengguna ke halaman login jika user_id tidak diset
     header('Location: login.php');
     exit;
 }
 
-// Mendapatkan user_id dari sesi
 $user_id = $_SESSION['user_id'];
 
-// Mengambil data keranjang untuk user yang sedang login
-$cart_items = getCart($user_id);
+// Hapus item dari keranjang
+if (isset($_GET['remove'])) {
+    $product_id = intval($_GET['remove']); // Pastikan product_id adalah integer
+    if (removeFromCart($product_id, $user_id)) {
+        echo "<script>alert('Produk berhasil dihapus dari keranjang');</script>";
+    } else {
+        echo "<script>alert('Gagal menghapus produk dari keranjang');</script>";
+    }
+    echo "<script>window.location.href = 'cart.php';</script>";
+    exit;
+}
 
+
+// Proses checkout
+if (isset($_POST['checkout'])) {
+    $total = checkout($user_id);
+    echo "<script>alert('Checkout berhasil. Total pembayaran: Rp$total');</script>";
+    echo "<script>window.location.href = 'cart.php';</script>";
+    exit;
+}
+
+// Dapatkan item dari keranjang
+$cart_items = getCartItems($user_id);
 ?>
+
 <!DOCTYPE html>
 <html>
 
 <head>
     <meta charset="UTF-8" />
-    <title>Keranjang Belanja</title>
+    <title>Cart - Elito Shop</title>
     <link rel="stylesheet" type="text/css" href="main.css">
     <link rel="icon" href="aqua.jpg" type="image/x-con">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
@@ -43,52 +62,47 @@ $cart_items = getCart($user_id);
     ?>
     <div class="container">
         <div class="header">
-            <h1>Keranjang Belanja</h1>
+            <h1>Cart Page</h1>
         </div>
 
         <div class="table">
             <table border="1" cellspacing="0" width="100%" class="table table-bordered">
                 <tr>
                     <th>No.</th>
-                    <th>Gambar</th>
-                    <th>Nama</th>
+                    <th>Nama Produk</th>
                     <th>Harga</th>
                     <th>Jumlah</th>
                     <th>Total</th>
-                    <th>Hapus</th>
+                    <th>Beli</th>
                 </tr>
-                <?php $i = 1; ?>
+                <?php $i = 1; $total_bayar = 0; ?>
                 <?php foreach ($cart_items as $item): ?>
                 <tr>
                     <td><?= $i ?></td>
-                    <td><img class="card-img-top" height="100" src="img/<?= $item["gambar"]; ?>" alt="<?= $item["nama"]; ?>"></td>
-                    <td><?= $item["nama"]; ?></td>
-                    <td><?= $item["harga"]; ?></td>
-                    <td><?= $item["quantity"]; ?></td>
-                    <td><?= $item["harga"] * $item["quantity"]; ?></td>
+                    <td><?= htmlspecialchars($item["nama"] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars($item["harga"] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars($item["quantity"] ?? '', ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars($item["harga"] * $item["quantity"] ?? 0, ENT_QUOTES, 'UTF-8'); ?></td>
                     <td>
-                        <!-- Form untuk menghapus barang dari keranjang -->
-                        <form action="" method="post">
-                            <input type="hidden" name="cart_id" value="<?= $item['id']; ?>">
-                            <button type="submit" name="remove_from_cart" class="btn btn-danger">Hapus</button>
-                        </form>
+                        <!-- Tombol untuk menghapus produk dari keranjang -->
+                        <a href="cart.php?remove=<?= htmlspecialchars($item['product_id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-danger">Hapus</a>
+                        <!-- checkout peritem -->
+                        <a href="cart.php?checkout=<?= htmlspecialchars($item['product_id'] ?? '', ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-success">Checkout</a>
+
                     </td>
                 </tr>
+                <?php $total_bayar += $item["harga"] * $item["quantity"]; ?>
                 <?php $i++; ?>
                 <?php endforeach; ?>
+                <tr>
+                    <td colspan="4" align="right"><strong>Total Bayar:</strong></td>
+                    <td colspan="2"><strong>Rp<?= htmlspecialchars($total_bayar, ENT_QUOTES, 'UTF-8'); ?></strong></td>
+                </tr>
             </table>
         </div>
-
-        <?php
-        // Memproses penghapusan barang dari keranjang
-        if (isset($_POST['remove_from_cart'])) {
-            $cart_id = $_POST['cart_id'];
-            removeFromCart($cart_id);
-            echo "<script>alert('Barang berhasil dihapus dari keranjang');</script>";
-            echo "<script>window.location.href='cart.php';</script>"; // Refresh halaman untuk memperbarui daftar keranjang
-        }
-        ?>
-
+        <form method="post" action="">
+            <button type="submit" name="checkout" class="btn btn-success">Checkout</button>
+        </form>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"

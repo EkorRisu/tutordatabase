@@ -1,5 +1,4 @@
 <?php
-session_start();
 ?>
 <div class="custom-bg">
     <div class="na">

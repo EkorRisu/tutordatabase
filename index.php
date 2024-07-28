@@ -1,4 +1,5 @@
 <?php
+session_start();
 require 'fuction.php';
 
 // Memeriksa apakah user_id sudah diset dalam sesi
@@ -13,6 +14,16 @@ $produk = query("SELECT * FROM produk ORDER BY nama ASC");
 // pengaktifan tombol cari
 if (isset($_POST["cari"])) {
     $produk = cari($_POST["keyword"]);
+}
+
+// Tambahkan produk ke keranjang
+if (isset($_GET['id']) && isset($_SESSION['user_id'])) {
+    $product_id = $_GET['id'];
+    if (addToCart($product_id, $_SESSION['user_id'])) {
+        echo "<script>alert('Produk telah dimasukan di dalam keranjang');</script>";
+    } else {
+       echo "<script>alert('Produk sudah dimasukan ada di keranjang');</script>";
+    }
 }
 ?>
 
@@ -49,7 +60,7 @@ if (isset($_POST["cari"])) {
         <div class="table">
             <table border="1" cellspacing="0" width="100%" class="table table-bordered">
                 <tr>
-                    <th>no.</th>
+                    <th>No.</th>
                     <th>Gambar</th>
                     <th>Harga</th>
                     <th>Nama</th>
@@ -65,8 +76,8 @@ if (isset($_POST["cari"])) {
                     <td><?= $row["nama"]; ?></td>
                     <td><?= $row["tersedia"]; ?></td>
                     <td>
-                        <!-- Form untuk menambahkan barang ke keranjang -->
-                        <a href="cart.php?id=<? echo $values ['id_product'] ?>" class="btn btn-primary">add to cart </a>
+                        <!-- Link untuk menambahkan barang ke keranjang -->
+                        <a href="index.php?id=<?= $row['id'];?>" class="btn btn-primary">Add to Cart</a>
                     </td>
                 </tr>
                 <?php $i++; ?>
